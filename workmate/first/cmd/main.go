@@ -1,20 +1,26 @@
 package main
 
 import (
-	"first/internal"
+	"fmt"
+	"github.com/maximsavonin/Tests/workmate/first/internal"
 	"net/http"
 )
 
 func main() {
-	// Создаем лимитер на 3 одновременных запросов
+	// Создаем лимиты на 3 слота
 	limiter := internal.NewRateLimiter(3)
-
-	// Инициализируем обработчик с лимитером
-	downloadHandler := internal.NewDownloadHandler(limiter)
+	limiterdownload := internal.NewRateLimiter(3)
 
 	// Настраиваем маршруты
-	http.Handle("/download", downloadHandler)
+	downloadHandler := internal.NewHandler(limiter, limiterdownload)
+
+	http.HandleFunc("/downloadandzip", downloadHandler.DownloadAndZip)
+	http.HandleFunc("/createzip", downloadHandler.CreateZip)
+	http.HandleFunc("/addtozip", downloadHandler.AddToZip)
+	http.HandleFunc("/downloadzip", downloadHandler.DownloadZip)
+	http.HandleFunc("/downloadzipanddelete", downloadHandler.DownloadZipAndDelete)
 
 	// Запускаем сервер
+	fmt.Println("Server Started")
 	http.ListenAndServe(":8080", nil)
 }

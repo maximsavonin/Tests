@@ -1,20 +1,27 @@
 package internal
 
-// Request структура для входящего JSON
-type DownloadRequest struct {
-	URLs []string `json:"urls"`
+// структура для входящего JSON
+type Request struct {
+	FileName string   `json:"filename"`
+	URLs     []string `json:"urls"`
 }
 
-// Response структура для ответа об ошибках
+// структура для ответа об ошибках
 type ErrorResponse struct {
 	URL   string `json:"url"`
 	Error string `json:"error"`
 }
 
-// DownloadResult содержит результат скачивания файла
+// результат скачивания файла
 type DownloadResult struct {
-	URL      string
-	Filename string
-	Content  []byte
-	Error    error
+	URL      string `json:"url"`
+	Filename string `json:"filename"`
+	Content  []byte `json:"content"`
+	Error    error  `json:"error"`
+}
+
+// структура для удобного хранения лимитов (типа ООП) для нашего обработчика запросов
+type Handler struct {
+	limiter         *RateLimiter
+	limiterdownload *RateLimiter
 }

@@ -1,23 +1,32 @@
 package internal
 
-// RateLimiter ограничивает количество одновременных запросов
+import "errors"
+
+var ErrLimit = errors.New("err limit")
+
+// ограничение одновременых запросов
 type RateLimiter struct {
-	sem chan struct{}
+	lim chan struct{}
 }
 
-// NewRateLimiter создает новый лимитер
+// Создание лимитера
 func NewRateLimiter(maxConcurrent int) *RateLimiter {
 	return &RateLimiter{
-		sem: make(chan struct{}, maxConcurrent),
+		lim: make(chan struct{}, maxConcurrent),
 	}
 }
 
-// Acquire получает слот (блокирует при достижении лимита)
-func (rl *RateLimiter) Acquire() {
-	rl.sem <- struct{}{}
+// Занимаем слот
+func (rl *RateLimiter) Acquire() error {
+	select {
+	case rl.lim <- struct{}{}:
+		return nil
+	default:
+		return ErrLimit
+	}
 }
 
-// Release освобождает слот
+// освобождаем слот
 func (rl *RateLimiter) Release() {
-	<-rl.sem
+	<-rl.lim
 }
