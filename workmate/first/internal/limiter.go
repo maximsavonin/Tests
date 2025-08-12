@@ -16,14 +16,20 @@ func NewRateLimiter(maxConcurrent int) *RateLimiter {
 	}
 }
 
-// Занимаем слот
-func (rl *RateLimiter) Acquire() error {
+// Занимаем слот если есть свободный
+func (rl *RateLimiter) TryAcquire() error {
 	select {
 	case rl.lim <- struct{}{}:
 		return nil
 	default:
 		return ErrLimit
 	}
+}
+
+// Занимаем слот
+func (rl *RateLimiter) Acquire() {
+	rl.lim <- struct{}{}
+
 }
 
 // освобождаем слот

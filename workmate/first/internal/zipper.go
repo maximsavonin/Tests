@@ -23,7 +23,7 @@ func NewHandler(limiter *RateLimiter, limiterdownload *RateLimiter) *Handler {
 
 // Скачиваем архивируем и сразу возвращаем zip
 func (h *Handler) DownloadAndZip(w http.ResponseWriter, r *http.Request) {
-	err := h.limiter.Acquire()
+	err := h.limiter.TryAcquire()
 	if err != nil {
 		http.Error(w, "Server is busy", http.StatusServiceUnavailable)
 		return
@@ -123,7 +123,7 @@ func (h *Handler) DownloadAndZip(w http.ResponseWriter, r *http.Request) {
 
 // Создаём архив
 func (h *Handler) CreateZip(w http.ResponseWriter, r *http.Request) {
-	err := h.limiter.Acquire()
+	err := h.limiter.TryAcquire()
 	if err != nil {
 		http.Error(w, "Server is busy", http.StatusServiceUnavailable)
 		return
@@ -146,7 +146,11 @@ func (h *Handler) CreateZip(w http.ResponseWriter, r *http.Request) {
 		filename += ".zip"
 	}
 
-	// Создаем архив
+	if _, err = os.Open(filename); err == nil {
+		http.Error(w, "Error file name", http.StatusBadRequest)
+		return
+	}
+
 	file, err := os.Create(filename)
 	if err != nil {
 		http.Error(w, "Error create zip", http.StatusInternalServerError)
@@ -162,7 +166,7 @@ func (h *Handler) CreateZip(w http.ResponseWriter, r *http.Request) {
 
 // Добавляем файлы в архив
 func (h *Handler) AddToZip(w http.ResponseWriter, r *http.Request) {
-	err := h.limiter.Acquire()
+	err := h.limiter.TryAcquire()
 	if err != nil {
 		http.Error(w, "Server is busy", http.StatusServiceUnavailable)
 		return
@@ -255,7 +259,7 @@ func (h *Handler) AddToZip(w http.ResponseWriter, r *http.Request) {
 
 // Отправляем архив
 func (h *Handler) DownloadZip(w http.ResponseWriter, r *http.Request) {
-	err := h.limiter.Acquire()
+	err := h.limiter.TryAcquire()
 	if err != nil {
 		http.Error(w, "Server is busy", http.StatusServiceUnavailable)
 		return
@@ -308,7 +312,7 @@ func (h *Handler) DownloadZip(w http.ResponseWriter, r *http.Request) {
 
 // Отправляем и удаляем архив
 func (h *Handler) DownloadZipAndDelete(w http.ResponseWriter, r *http.Request) {
-	err := h.limiter.Acquire()
+	err := h.limiter.TryAcquire()
 	if err != nil {
 		http.Error(w, "Server is busy", http.StatusServiceUnavailable)
 		return
@@ -359,7 +363,7 @@ func (h *Handler) DownloadZipAndDelete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Удаление файла ПОСЛЕ успешной отправки
-	err = os.Remove("output.zip")
+	err = os.Remove(filename)
 	if err != nil {
 		log.Printf("Failed to delete file: %v", err)
 	}
@@ -379,6 +383,9 @@ func (h *Handler) downloadFiles(urls []string) []DownloadResult {
 	for i, urln := range urls {
 		wg.Add(1)
 		go func(i int, urln string) {
+			h.limiterdownload.Acquire()
+			defer h.limiterdownload.Release()
+
 			defer wg.Done()
 			result := DownloadResult{URL: urln}
 
@@ -439,7 +446,6 @@ func handleFilename(filename string) string {
 	filename = strings.ReplaceAll(filename, "/", "_")
 	filename = strings.ReplaceAll(filename, "\\", "_")
 	filename = strings.ReplaceAll(filename, ":", "_")
-	filename = strings.ReplaceAll(filename, "*", "_")
 	filename = strings.ReplaceAll(filename, "?", "_")
 	filename = strings.ReplaceAll(filename, "\"", "_")
 	filename = strings.ReplaceAll(filename, "<", "_")
@@ -457,5 +463,35 @@ func getContentType(mimeType string) string {
 		return ".pdf"
 	default:
 		return ""
+	}
+}
+
+// удаление файлов которые не изменялись более 2 часов
+func FileDeleter() {
+	for true {
+		files, err := os.ReadDir("./")
+		if err != nil {
+			fmt.Printf("Error read dir: %s", err)
+		}
+
+		for _, file := range files {
+			if file.IsDir() || !strings.EqualFold(filepath.Ext(file.Name()), ".zip") {
+				continue
+			}
+
+			filePath := filepath.Join("./", file.Name())
+			fileInfo, err := file.Info()
+			if err != nil {
+				fmt.Printf("Error read Info: %s", err)
+				continue
+			}
+
+			if time.Since(fileInfo.ModTime()) > 2*time.Hour {
+				fmt.Printf("File deletet: %s (no modify %v)\n",
+					file.Name(), time.Since(fileInfo.ModTime()))
+				os.Remove(filePath)
+			}
+		}
+		time.Sleep(time.Minute)
 	}
 }

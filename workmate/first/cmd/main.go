@@ -7,6 +7,8 @@ import (
 )
 
 func main() {
+	go internal.FileDeleter()
+
 	// Создаем лимиты на 3 слота
 	limiter := internal.NewRateLimiter(3)
 	limiterdownload := internal.NewRateLimiter(3)
